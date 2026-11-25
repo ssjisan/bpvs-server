@@ -35,6 +35,7 @@ for (const k of ["JWT_SECRET", "TOKEN_PEPPER"])
   )
     throw Error(`${k} must be a random secret of at least 64 characters`);
 const app = express();
+app.set("trust proxy", 1);
 app.disable("x-powered-by");
 app.use(helmet());
 app.use(
