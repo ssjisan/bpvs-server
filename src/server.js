@@ -34,21 +34,72 @@ for (const k of ["JWT_SECRET", "TOKEN_PEPPER"])
     process.env[k].startsWith("replace-")
   )
     throw Error(`${k} must be a random secret of at least 64 characters`);
+
 const app = express();
+
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
-app.use(helmet());
+
+// CORS allowed origins
+const allowedOrigins = new Set([
+  "https://bpvs-admin.vercel.app",
+  "http://localhost:3000",
+  "http://localhost:3001",
+  ...(process.env.CORS_ORIGINS || "")
+    .split(",")
+    .map((origin) => origin.trim().replace(/\/+$/, ""))
+    .filter(Boolean),
+]);
+
+// CORS middleware
 app.use(
   cors({
-    origin: (o, cb) =>
-      cb(null, !o || (process.env.CORS_ORIGINS || "").split(",").includes(o)),
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.has(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(
+        Object.assign(new Error("Origin not allowed by CORS"), {
+          status: 403,
+        })
+      );
+    },
+    methods: [
+      "GET",
+      "HEAD",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+      "OPTIONS",
+    ],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "Accept",
+      "ngrok-skip-browser-warning",
+    ],
+    exposedHeaders: ["Content-Disposition"],
     credentials: false,
-  }),
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
+  })
 );
+
+// Security middleware
+app.use(helmet());
+
+// Request body parser
 app.use(express.json({ limit: "64kb" }));
+
+// Rate limiter
 app.use(rateLimit({ windowMs: 60000, limit: 180 }));
+
+// API router
 const api = express.Router();
 app.use("/api/v1", api);
+
 const fail = (status, message) => {
   throw Object.assign(Error(message), { status });
 };
